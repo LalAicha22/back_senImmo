@@ -11,7 +11,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // --------------------
-// DB config (à adapter)
+// 1) Paramètre obligatoire: type
+// --------------------
+$type = isset($_GET['type']) ? strtolower(trim($_GET['type'])) : '';
+
+$allowedTypes = ['maison', 'appartement', 'studio'];
+if ($type === '' || !in_array($type, $allowedTypes, true)) {
+  http_response_code(400);
+  echo json_encode([
+    'ok' => false,
+    'message' => "Paramètre 'type' invalide. Valeurs possibles: maison, appartement, studio."
+  ]);
+  exit;
+}
+
+// --------------------
+// 2) DB config (à adapter)
 // --------------------
 $DB_HOST = "localhost";
 $DB_NAME = "senimmo";
@@ -35,15 +50,15 @@ try {
 }
 
 // --------------------
-// Paramètres optionnels
+// 3) Paramètres optionnels (filtres)
 // --------------------
-$statut = isset($_GET['statut']) ? trim($_GET['statut']) : '';        // ex: disponible
-$categorie = isset($_GET['categorie']) ? trim($_GET['categorie']) : ''; // ex: vente/location
-$minPrix = isset($_GET['minPrix']) ? floatval($_GET['minPrix']) : null;
-$maxPrix = isset($_GET['maxPrix']) ? floatval($_GET['maxPrix']) : null;
+$statut    = isset($_GET['statut']) ? trim($_GET['statut']) : '';       // disponible/indisponible
+$categorie = isset($_GET['categorie']) ? trim($_GET['categorie']) : ''; // vente/location
+$minPrix   = (isset($_GET['minPrix']) && $_GET['minPrix'] !== '') ? floatval($_GET['minPrix']) : null;
+$maxPrix   = (isset($_GET['maxPrix']) && $_GET['maxPrix'] !== '') ? floatval($_GET['maxPrix']) : null;
 
 // --------------------
-// Requête : type = maison
+// 4) Requête SQL dynamique (sécurisée)
 // --------------------
 $sql = "
 SELECT
@@ -61,9 +76,8 @@ FROM proprietes
 WHERE type = :type
 ";
 
-$params = [':type' => 'maison'];
+$params = [':type' => $type];
 
-// filtres optionnels
 if ($statut !== '') {
   $sql .= " AND statut = :statut";
   $params[':statut'] = $statut;
@@ -79,13 +93,16 @@ if ($minPrix !== null) {
   $params[':minPrix'] = $minPrix;
 }
 
-if ($maxPrix !== null && $maxPrix > 0) {
+if ($maxPrix !== null) {
   $sql .= " AND prix <= :maxPrix";
   $params[':maxPrix'] = $maxPrix;
 }
 
 $sql .= " ORDER BY created_at DESC";
 
+// --------------------
+// 5) Exécution + réponse
+// --------------------
 try {
   $stmt = $pdo->prepare($sql);
   $stmt->execute($params);
@@ -93,7 +110,7 @@ try {
 
   echo json_encode([
     'ok' => true,
-    'type' => 'maison',
+    'type' => $type,
     'count' => count($rows),
     'data' => $rows
   ]);

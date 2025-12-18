@@ -10,19 +10,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   exit;
 }
 
-$firebase_uid = isset($_GET['firebase_uid']) ? trim($_GET['firebase_uid']) : '';
 $propriete_id = isset($_GET['propriete_id']) ? (int) $_GET['propriete_id'] : 0;
 
-if ($firebase_uid === '' || $propriete_id <= 0) {
+if ($propriete_id <= 0) {
   http_response_code(400);
   echo json_encode([
     'ok' => false,
-    'message' => 'Paramètres invalides (firebase_uid, propriete_id)'
+    'message' => 'Paramètre invalide: propriete_id'
   ]);
   exit;
 }
 
-// DB config (à adapter)
+// DB config
 $DB_HOST = "localhost";
 $DB_NAME = "senimmo";
 $DB_USER = "root";
@@ -46,42 +45,29 @@ try {
 
 $sql = "
 SELECT
-  pr.id,
-  pr.proprietaire_id,
-  pr.titre,
-  pr.categorie,
-  pr.type,
-  pr.statut,
-  pr.prix,
-  pr.description,
-  pr.created_at,
-  pr.updated_at
-FROM proprietes pr
-WHERE pr.id = :pid
-  AND pr.proprietaire_id = (
-    SELECT id
-    FROM proprietaires
-    WHERE firebase_uid = :uid
-    LIMIT 1
-  )
+  id,
+  proprietaire_id,
+  titre,
+  categorie,
+  type,
+  statut,
+  prix,
+  description,
+  created_at,
+  updated_at
+FROM proprietes
+WHERE id = :pid
 LIMIT 1
 ";
 
 try {
   $stmt = $pdo->prepare($sql);
-  $stmt->execute([
-    ':uid' => $firebase_uid,
-    ':pid' => $propriete_id,
-  ]);
-
+  $stmt->execute([':pid' => $propriete_id]);
   $row = $stmt->fetch();
 
   if (!$row) {
     http_response_code(404);
-    echo json_encode([
-      'ok' => false,
-      'message' => "Propriété introuvable (ou n'appartient pas à ce propriétaire)."
-    ]);
+    echo json_encode(['ok' => false, 'message' => "Propriété introuvable."]);
     exit;
   }
 
