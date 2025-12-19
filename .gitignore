@@ -1,0 +1,4 @@
+/vendor/
+/uploads/
+.env
+config/config.php
