@@ -8,51 +8,55 @@ try {
     // ===============================
     $titre = trim($_POST['titre'] ?? '');
     $description = trim($_POST['description'] ?? '');
-    $type = trim($_POST['type'] ?? '');
-    $categorie = trim($_POST['categorie'] ?? '');
+    $categorie = trim($_POST['categorie'] ?? ''); // vente ou location
+    $type = trim($_POST['type'] ?? ''); // maison, studio ou appartement
     $prix = trim($_POST['prix'] ?? '');
     $superficie = trim($_POST['superficie'] ?? '');
     $adresse = trim($_POST['adresse'] ?? '');
-    $nombreChambres = trim($_POST['nombre_chambres'] ?? '');
 
     // Valeurs serveur
     $statut = 'disponible';
-    $proprietaireId = 1; // TODO: récupérer l'utilisateur connecté
+    $proprietaireId = 2; // TODO: récupérer l'utilisateur connecté via Firebase
 
     // ===============================
     // 2. VALIDATIONS
     // ===============================
     if ($titre === '' || $description === '' || $type === '' ||
-        $categorie === '' || $prix === '' || $superficie === '' || $adresse === '') {
+        $categorie === '' || $prix === '' || $adresse === '') {
         http_response_code(400);
         echo json_encode(['ok'=>false,'message'=>'Champs requis manquants']);
         exit;
     }
 
-    if (!in_array($type, ['vente','location'])) {
+    // Validation de la catégorie (vente ou location)
+    if (!in_array($categorie, ['vente','location'])) {
         http_response_code(400);
-        echo json_encode(['ok'=>false,'message'=>'Type invalide']);
+        echo json_encode(['ok'=>false,'message'=>'Catégorie invalide (vente ou location)']);
         exit;
     }
 
-    if (!in_array($categorie, ['maison','studio','appartement'])) {
+    // Validation du type (maison, studio ou appartement)
+    if (!in_array($type, ['maison','studio','appartement'])) {
         http_response_code(400);
-        echo json_encode(['ok'=>false,'message'=>'Catégorie invalide']);
+        echo json_encode(['ok'=>false,'message'=>'Type invalide (maison, studio ou appartement)']);
         exit;
     }
 
-    if (!is_numeric($prix) || !is_numeric($superficie)) {
+    // Validation du prix
+    if (!is_numeric($prix) || $prix <= 0) {
         http_response_code(400);
-        echo json_encode(['ok'=>false,'message'=>'Prix ou superficie invalide']);
+        echo json_encode(['ok'=>false,'message'=>'Prix invalide']);
         exit;
     }
 
-    if ($nombreChambres !== '' && !is_numeric($nombreChambres)) {
+    // Validation de la superficie (optionnelle)
+    if ($superficie !== '' && (!is_numeric($superficie) || $superficie <= 0)) {
         http_response_code(400);
-        echo json_encode(['ok'=>false,'message'=>'Nombre de chambres invalide']);
+        echo json_encode(['ok'=>false,'message'=>'Superficie invalide']);
         exit;
     }
 
+    // Validation de l'image
     if (empty($_FILES['image']['name'])) {
         http_response_code(400);
         echo json_encode(['ok'=>false,'message'=>'Image requise']);
@@ -63,15 +67,17 @@ try {
     // 3. CONTRÔLE DES DOUBLONS
     // ===============================
     $stmtCheck = $pdo->prepare("
-        SELECT COUNT(*) FROM property 
+        SELECT COUNT(*) FROM proprietes 
         WHERE LOWER(titre) = LOWER(:titre) 
           AND LOWER(adresse) = LOWER(:adresse)
           AND type = :type
+          AND proprietaire_id = :prop_id
     ");
     $stmtCheck->execute([
         ':titre' => $titre,
         ':adresse' => $adresse,
-        ':type' => $type
+        ':type' => $type,
+        ':prop_id' => $proprietaireId
     ]);
     $count = $stmtCheck->fetchColumn();
     if ($count > 0) {
@@ -91,7 +97,7 @@ try {
     $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, ['jpg','jpeg','png','webp'])) {
         http_response_code(400);
-        echo json_encode(['ok'=>false,'message'=>'Format image invalide']);
+        echo json_encode(['ok'=>false,'message'=>'Format image invalide (jpg, jpeg, png, webp)']);
         exit;
     }
 
@@ -106,26 +112,25 @@ try {
     // 5. INSERTION EN BASE
     // ===============================
     $stmt = $pdo->prepare("
-        INSERT INTO property
-        (titre, description, type, categorie, prix, superficie, adresse,
-         nombre_chambres, statut, image, proprietaire_id)
+        INSERT INTO proprietes
+        (proprietaire_id, titre, categorie, type, statut, prix, 
+         adresse, superficie, description, imageurl)
         VALUES
-        (:titre, :description, :type, :categorie, :prix, :superficie, :adresse,
-         :chambres, :statut, :image, :prop)
+        (:prop_id, :titre, :categorie, :type, :statut, :prix, 
+         :adresse, :superficie, :description, :imageurl)
     ");
 
     $stmt->execute([
+        ':prop_id' => $proprietaireId,
         ':titre' => $titre,
-        ':description' => $description,
-        ':type' => $type,
         ':categorie' => $categorie,
-        ':prix' => $prix,
-        ':superficie' => $superficie,
-        ':adresse' => $adresse,
-        ':chambres' => $nombreChambres !== '' ? $nombreChambres : null,
+        ':type' => $type,
         ':statut' => $statut,
-        ':image' => $filename, // ✅ Stocke seulement le nom du fichier
-        ':prop' => $proprietaireId
+        ':prix' => $prix,
+        ':adresse' => $adresse,
+        ':superficie' => $superficie !== '' ? $superficie : null,
+        ':description' => $description,
+        ':imageurl' => $filename
     ]);
 
     // ===============================
@@ -139,6 +144,7 @@ try {
     ]);
 
 } catch (Throwable $e) {
+    // Nettoyage de l'image en cas d'erreur
     if (isset($target) && file_exists($target)) {
         unlink($target);
     }
@@ -146,6 +152,6 @@ try {
     http_response_code(500);
     echo json_encode([
         'ok'=>false,
-        'message'=>$e->getMessage()
+        'message'=>'Erreur serveur: ' . $e->getMessage()
     ]);
 }
