@@ -7,8 +7,8 @@ try {
   // 1. RÉCUPÉRATION DES PARAMÈTRES
   // ===============================
   $search = trim($_GET['search'] ?? '');
-  $type = trim($_GET['type'] ?? '');
-  $categorie = trim($_GET['categorie'] ?? '');
+  $categorie = trim($_GET['categorie'] ?? ''); // vente ou location
+  $type = trim($_GET['type'] ?? ''); // maison, studio ou appartement
   $statut = trim($_GET['statut'] ?? '');
 
   // ===============================
@@ -18,20 +18,20 @@ try {
   // Base de la requête
   $sql = "
     SELECT 
-      id,
-      titre,
-      description,
-      type,
-      categorie,
-      prix,
-      superficie,
-      adresse,
-      nombre_chambres,
-      statut,
-      image,
-      proprietaire_id,
-      created_at
-    FROM property
+      p.id,
+      p.titre,
+      p.description,
+      p.categorie,
+      p.type,
+      p.prix,
+      p.superficie,
+      p.adresse,
+      p.statut,
+      p.imageurl,
+      p.proprietaire_id,
+      p.created_at,
+      p.updated_at
+    FROM proprietes p
     WHERE 1=1
   ";
 
@@ -40,38 +40,38 @@ try {
   // ✅ Filtre par recherche (tous les champs)
   if ($search !== '') {
     $sql .= " AND (
-      titre LIKE :search
-      OR description LIKE :search
-      OR type LIKE :search
-      OR categorie LIKE :search
-      OR adresse LIKE :search
-      OR statut LIKE :search
-      OR CAST(prix AS CHAR) LIKE :search
-      OR CAST(superficie AS CHAR) LIKE :search
+      p.titre LIKE :search
+      OR p.description LIKE :search
+      OR p.type LIKE :search
+      OR p.categorie LIKE :search
+      OR p.adresse LIKE :search
+      OR p.statut LIKE :search
+      OR CAST(p.prix AS CHAR) LIKE :search
+      OR CAST(p.superficie AS CHAR) LIKE :search
     )";
     $params[':search'] = '%' . $search . '%';
   }
 
-  // ✅ Filtre par TYPE (location/vente)
-  if ($type !== '') {
-    $sql .= " AND type = :type";
-    $params[':type'] = $type;
-  }
-
-  // ✅ Filtre par CATEGORIE (maison/appartement/studio)
+  // ✅ Filtre par CATEGORIE (vente/location)
   if ($categorie !== '') {
-    $sql .= " AND categorie = :categorie";
+    $sql .= " AND p.categorie = :categorie";
     $params[':categorie'] = $categorie;
   }
 
-  // ✅ Filtre par STATUT (disponible/loue/vendu)
+  // ✅ Filtre par TYPE (maison/appartement/studio)
+  if ($type !== '') {
+    $sql .= " AND p.type = :type";
+    $params[':type'] = $type;
+  }
+
+  // ✅ Filtre par STATUT (disponible/indisponible)
   if ($statut !== '') {
-    $sql .= " AND statut = :statut";
+    $sql .= " AND p.statut = :statut";
     $params[':statut'] = $statut;
   }
 
   // Tri par ID décroissant (les plus récents en premier)
-  $sql .= " ORDER BY id DESC";
+  $sql .= " ORDER BY p.id DESC";
 
   // ===============================
   // 3. EXÉCUTION DE LA REQUÊTE
@@ -85,8 +85,8 @@ try {
   // ===============================
   error_log("=== GET PROPERTIES ===");
   error_log("Search: " . ($search ?: 'none'));
-  error_log("Type: " . ($type ?: 'none'));
   error_log("Categorie: " . ($categorie ?: 'none'));
+  error_log("Type: " . ($type ?: 'none'));
   error_log("Statut: " . ($statut ?: 'none'));
   error_log("Results: " . count($properties));
 
@@ -99,8 +99,8 @@ try {
     'count' => count($properties),
     'filters' => [
       'search' => $search,
-      'type' => $type,
       'categorie' => $categorie,
+      'type' => $type,
       'statut' => $statut
     ]
   ], JSON_UNESCAPED_UNICODE);
